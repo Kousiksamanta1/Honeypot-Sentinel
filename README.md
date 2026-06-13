@@ -1,8 +1,14 @@
+<p align="center">
+  <img src="docs/social-preview.png" alt="Honeypot Sentinel social preview" width="100%" />
+</p>
+
 # Honeypot Sentinel
 
+[![CI](https://github.com/Kousiksamanta1/Honeypot-Sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/Kousiksamanta1/Honeypot-Sentinel/actions/workflows/ci.yml)
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Flask](https://img.shields.io/badge/Flask-3.x-111111?logo=flask)](https://flask.palletsprojects.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-d5a94f.svg)](#license)
+[![Portfolio](https://img.shields.io/badge/Portfolio-Operator_Archive-66e3ff)](https://kousiksamanta1.github.io/PORTFOLIO/)
 
 Honeypot Sentinel is a small, cross-platform network honeypot with a live web
 dashboard. It runs decoy SSH, HTTP, FTP, and Telnet services, records what
@@ -512,6 +518,16 @@ HTTP_PORT=18080
 | Charts | Chart.js |
 | Frontend | HTML, CSS, vanilla JavaScript |
 
+## Contributing
+
+Use synthetic data and isolated lab environments for tests and screenshots.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing changes.
+
+## Security
+
+Do not disclose captured credentials, public IP telemetry, or deployment details
+in an issue. Follow [SECURITY.md](SECURITY.md) for private reporting guidance.
+
 ## Legal Disclaimer
 
 Run Honeypot Sentinel only on systems and networks you own or have explicit
@@ -522,24 +538,4 @@ The authors and contributors accept no liability for misuse or damage.
 
 ## License
 
-MIT License
-
-Copyright (c) 2026 KousikSamanta
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+MIT. See [LICENSE](LICENSE).

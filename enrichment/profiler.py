@@ -39,7 +39,7 @@ def update_attacker_profile(event, increment=True):
             )
             is_flagged = int(
                 abuse_score > 50
-                or total_attempts > ALERT_THRESHOLD
+                or total_attempts >= ALERT_THRESHOLD
                 or bool(existing["is_flagged"])
             )
             location_fields = {
@@ -107,7 +107,7 @@ def update_attacker_profile(event, increment=True):
             total_attempts = 1
             abuse_score = int(event.get("abuse_score") or 0)
             is_flagged = int(
-                abuse_score > 50 or total_attempts > ALERT_THRESHOLD
+                abuse_score > 50 or total_attempts >= ALERT_THRESHOLD
             )
             connection.execute(
                 """
