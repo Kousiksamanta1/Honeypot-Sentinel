@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Honeypot Sentinel security monitoring dashboard">
+  <title>Honeypot Sentinel</title>
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin="">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+          crossorigin="" defer></script>
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/charts.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/map.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/locations.js') }}" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Threat capture console</p>
+      <h1><span class="brand-mark">HS</span> Honeypot Sentinel</h1>
+    </div>
+    <div class="system-state"><span class="pulse"></span> Monitoring live</div>
+  </header>
+
+  <nav class="tabs" aria-label="Dashboard sections">
+    <button class="tab-button active" data-tab="overview">Overview</button>
+    <button class="tab-button" data-tab="live-feed">Live Feed</button>
+    <button class="tab-button" data-tab="attack-map">Attack Map</button>
+    <button class="tab-button" data-tab="locations">Locations</button>
+    <button class="tab-button" data-tab="profiles">Attacker Profiles</button>
+    <button class="tab-button" data-tab="alerts">Alerts</button>
+  </nav>
+
+  <main>
+    <section id="overview" class="tab-panel active">
+      <div class="stat-grid">
+        <article class="stat-card">
+          <span>Total Attacks</span>
+          <strong id="stat-total">0</strong>
+        </article>
+        <article class="stat-card">
+          <span>Unique Attackers</span>
+          <strong id="stat-unique">0</strong>
+        </article>
+        <article class="stat-card danger-card">
+          <span>Known Malicious IPs</span>
+          <strong id="stat-known">0</strong>
+        </article>
+        <article class="stat-card">
+          <span>Countries Seen</span>
+          <strong id="stat-countries">0</strong>
+        </article>
+        <article class="stat-card">
+          <span>Most Active Region</span>
+          <strong id="stat-region" class="stat-text">N/A</strong>
+        </article>
+      </div>
+
+      <div class="chart-grid">
+        <article class="panel chart-wide">
+          <div class="panel-heading">
+            <div><p class="eyebrow">Origin</p><h2>Top attacking countries</h2></div>
+          </div>
+          <div class="chart-wrap"><canvas id="countries-chart"></canvas></div>
+        </article>
+        <article class="panel">
+          <div class="panel-heading">
+            <div><p class="eyebrow">Surface</p><h2>Attacks by service</h2></div>
+          </div>
+          <div class="chart-wrap"><canvas id="services-chart"></canvas></div>
+        </article>
+        <article class="panel chart-full">
+          <div class="panel-heading">
+            <div><p class="eyebrow">Velocity</p><h2>Last 24 hours</h2></div>
+          </div>
+          <div class="chart-wrap chart-short"><canvas id="hourly-chart"></canvas></div>
+        </article>
+      </div>
+
+      <div class="two-column">
+        <article class="panel">
+          <div class="panel-heading"><h2>Top usernames tried</h2></div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Username</th><th>Attempts</th></tr></thead>
+              <tbody id="top-usernames"></tbody>
+            </table>
+          </div>
+        </article>
+        <article class="panel">
+          <div class="panel-heading"><h2>Top passwords tried</h2></div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Password</th><th>Attempts</th></tr></thead>
+              <tbody id="top-passwords"></tbody>
+            </table>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="live-feed" class="tab-panel">
+      <article class="panel">
+        <div class="panel-heading">
+          <div><p class="eyebrow">Last 50 events</p><h2>Live attack feed</h2></div>
+          <span class="refresh-note">Refreshes every 10 seconds</span>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th><th>IP</th><th>Country</th><th>City</th>
+                <th>Service</th><th>Username</th><th>Password</th><th>Abuse Score</th>
+              </tr>
+            </thead>
+            <tbody id="events-table"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <section id="attack-map" class="tab-panel">
+      <article class="panel map-panel">
+          <div class="panel-heading">
+            <div><p class="eyebrow">Geospatial intelligence</p><h2>Global attack map</h2></div>
+            <div class="map-legend">
+              <span><i class="legend-dot low"></i> Low</span>
+              <span><i class="legend-dot elevated"></i> Elevated</span>
+              <span><i class="legend-dot high"></i> High</span>
+            </div>
+          </div>
+          <div class="map-stage">
+            <div id="main-map" aria-label="World map of attacker locations"></div>
+            <div id="map-status" class="map-status" data-state="loading">
+              <span class="spinner"></span>
+              <span id="map-status-text">Map starts when this tab is opened</span>
+            </div>
+          </div>
+      </article>
+    </section>
+
+    <section id="locations" class="tab-panel">
+      <div id="location-summary" class="summary-bar"></div>
+      <article class="panel">
+        <div class="panel-heading">
+          <div><p class="eyebrow">Country ranking</p><h2>Attack origin leaderboard</h2></div>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Flag</th><th>Country</th><th>Region</th><th>Total Attacks</th>
+                <th>Top City</th><th>% of Total</th><th>Share</th>
+              </tr>
+            </thead>
+            <tbody id="country-leaderboard"></tbody>
+          </table>
+        </div>
+      </article>
+      <article class="panel">
+        <div class="panel-heading">
+          <div><p class="eyebrow">City ranking</p><h2>Top 20 cities</h2></div>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>City</th><th>Country</th><th>Attack Count</th><th>ISP</th></tr></thead>
+            <tbody id="top-cities"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <section id="profiles" class="tab-panel">
+      <article class="panel">
+        <div class="panel-heading">
+          <div><p class="eyebrow">Aggregated behavior</p><h2>Top attacker profiles</h2></div>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>IP</th><th>Country</th><th>City</th><th>Region</th>
+                <th>First Seen</th><th>Last Seen</th><th>Total</th>
+                <th>Services</th><th>Abuse Score</th><th>Flagged</th>
+              </tr>
+            </thead>
+            <tbody id="profiles-table"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <section id="alerts" class="tab-panel">
+      <article class="panel">
+        <div class="panel-heading">
+          <div><p class="eyebrow">Priority queue</p><h2>High-risk alerts</h2></div>
+        </div>
+        <div id="alerts-list" class="alerts-list"></div>
+      </article>
+    </section>
+  </main>
+
+  <div id="attacker-modal" class="modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal></div>
+    <section class="modal-content" role="dialog" aria-modal="true"
+             aria-labelledby="modal-title">
+      <button class="modal-close" data-close-modal aria-label="Close profile">&times;</button>
+      <div id="modal-body">
+        <div class="loading"><span class="spinner"></span> Loading attacker profile</div>
+      </div>
+    </section>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
