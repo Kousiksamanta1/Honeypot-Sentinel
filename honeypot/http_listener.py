@@ -5,7 +5,8 @@ import socket
 import threading
 from urllib.parse import parse_qs
 
-from config import HONEYPOT_HOST, HTTP_PORT
+from config import HONEYPOT_HOST, HTTP_MAX_BODY_BYTES, HTTP_MAX_HEADER_BYTES, HTTP_PORT
+from honeypot.listener_utils import ThreadLimitedTCPListenerMixin
 from honeypot.logger import event_logger
 
 
@@ -36,7 +37,7 @@ LOGIN_PAGE = """<!doctype html>
 </html>"""
 
 
-class HTTPListener:
+class HTTPListener(ThreadLimitedTCPListenerMixin):
     service = "HTTP"
 
     def __init__(self, host=HONEYPOT_HOST, port=HTTP_PORT):
@@ -44,6 +45,7 @@ class HTTPListener:
         self.port = port
         self._socket = None
         self._stop_event = threading.Event()
+        self._init_client_limiter()
 
     def serve_forever(self):
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -63,12 +65,7 @@ class HTTPListener:
                     if not self._stop_event.is_set():
                         event_logger.warning("HTTP listener accept failed")
                     break
-                threading.Thread(
-                    target=self._handle_client,
-                    args=(client, address),
-                    daemon=True,
-                    name=f"http-client-{address[0]}",
-                ).start()
+                self._start_client_thread(client, address)
         except OSError as exc:
             event_logger.warning(
                 f"HTTP honeypot could not bind to {self.host}:{self.port}: {exc}"
@@ -83,7 +80,7 @@ class HTTPListener:
     @staticmethod
     def _read_request(client):
         data = bytearray()
-        while b"\r\n\r\n" not in data and len(data) < 65536:
+        while b"\r\n\r\n" not in data and len(data) < HTTP_MAX_HEADER_BYTES:
             chunk = client.recv(4096)
             if not chunk:
                 break
@@ -97,7 +94,10 @@ class HTTPListener:
         for line in headers.split("\r\n")[1:]:
             if line.lower().startswith("content-length:"):
                 try:
-                    content_length = min(int(line.split(":", 1)[1].strip()), 1048576)
+                    content_length = min(
+                        max(int(line.split(":", 1)[1].strip()), 0),
+                        HTTP_MAX_BODY_BYTES,
+                    )
                 except ValueError:
                     content_length = 0
         body_start = header_end + 4

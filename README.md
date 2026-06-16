@@ -333,6 +333,10 @@ ABUSEIPDB_API_KEY=
 HONEYPOT_HOST=0.0.0.0
 FLASK_HOST=127.0.0.1
 FLASK_PORT=5000
+DASHBOARD_USERNAME=admin
+DASHBOARD_PASSWORD=
+API_CORS_ORIGINS=
+STORE_SENSITIVE_VALUES=false
 ```
 
 Additional port variables can be added:
@@ -349,6 +353,13 @@ TELNET_PORT=2323
 | `HONEYPOT_HOST` | `0.0.0.0` | Makes the four decoy listeners available on network interfaces |
 | `FLASK_HOST` | `127.0.0.1` | Keeps the unauthenticated dashboard local |
 | `FLASK_PORT` | `5000` | Dashboard port |
+| `DASHBOARD_USERNAME` | `admin` | Basic Auth username when `DASHBOARD_PASSWORD` is set |
+| `DASHBOARD_PASSWORD` | empty | Basic Auth password; required when `FLASK_HOST` is not loopback |
+| `API_CORS_ORIGINS` | empty | Comma-separated origins allowed to call `/api/*`; empty keeps API same-origin |
+| `STORE_SENSITIVE_VALUES` | `false` | Stores captured passwords and raw payloads only when explicitly enabled |
+| `MAX_CLIENT_THREADS` | `50` | Maximum concurrent client handler threads per decoy listener |
+| `ENRICHMENT_QUEUE_SIZE` | `1000` | Maximum queued GeoIP/reputation enrichment jobs |
+| `GEOIP_LOOKUP_URL` | `https://ipapi.co/{ip_address}/json/` | GeoIP endpoint template |
 | `SSH_PORT` | `2222` | SSH decoy port |
 | `HTTP_PORT` | `8080` | HTTP decoy port |
 | `FTP_PORT` | `2121` | FTP decoy port |
@@ -367,6 +378,7 @@ another device on a trusted private network, set:
 ```dotenv
 FLASK_HOST=0.0.0.0
 FLASK_PORT=55000
+DASHBOARD_PASSWORD=replace-with-a-long-random-password
 ```
 
 Restart the application and find the computer's LAN address.
@@ -389,9 +401,10 @@ Windows:
 ipconfig
 ```
 
-Open `http://LAN_IP:55000` on the second device. Both devices must be on a
-network that permits device-to-device traffic. Guest, university, hotel, and
-workplace Wi-Fi commonly block this with client isolation.
+Open `http://LAN_IP:55000` on the second device and authenticate with
+`DASHBOARD_USERNAME` and `DASHBOARD_PASSWORD`. Both devices must be on a network
+that permits device-to-device traffic. Guest, university, hotel, and workplace
+Wi-Fi commonly block this with client isolation.
 
 Return `FLASK_HOST` to `127.0.0.1` before any public deployment.
 

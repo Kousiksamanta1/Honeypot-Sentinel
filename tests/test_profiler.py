@@ -70,7 +70,18 @@ class ProfilerTests(unittest.TestCase):
         self.assertEqual(profiler._ordered_values("SSH", "FTP"), "SSH,FTP")
         self.assertEqual(profiler._ordered_values("SSH", ""), "SSH")
 
+    def test_malformed_event_does_not_crash_profile_update(self):
+        self.assertFalse(profiler.update_attacker_profile({}))
+        self.assertFalse(
+            profiler.update_attacker_profile(
+                {
+                    "ip_address": "192.0.2.10",
+                    "timestamp": "2026-06-13T12:00:00+00:00",
+                    "abuse_score": "not-an-int",
+                }
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
-

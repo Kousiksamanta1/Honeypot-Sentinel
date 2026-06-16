@@ -3,11 +3,12 @@
 import socket
 import threading
 
-from config import FTP_PORT, HONEYPOT_HOST
+from config import FTP_PORT, HONEYPOT_HOST, MAX_RAW_DATA_LENGTH
+from honeypot.listener_utils import ThreadLimitedTCPListenerMixin
 from honeypot.logger import event_logger
 
 
-class FTPListener:
+class FTPListener(ThreadLimitedTCPListenerMixin):
     service = "FTP"
 
     def __init__(self, host=HONEYPOT_HOST, port=FTP_PORT):
@@ -15,6 +16,7 @@ class FTPListener:
         self.port = port
         self._socket = None
         self._stop_event = threading.Event()
+        self._init_client_limiter()
 
     def serve_forever(self):
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -34,12 +36,7 @@ class FTPListener:
                     if not self._stop_event.is_set():
                         event_logger.warning("FTP listener accept failed")
                     break
-                threading.Thread(
-                    target=self._handle_client,
-                    args=(client, address),
-                    daemon=True,
-                    name=f"ftp-client-{address[0]}",
-                ).start()
+                self._start_client_thread(client, address)
         except OSError as exc:
             event_logger.warning(
                 f"FTP honeypot could not bind to {self.host}:{self.port}: {exc}"
@@ -65,6 +62,13 @@ class FTPListener:
                 if not data:
                     break
                 buffer += data
+                if len(buffer) > MAX_RAW_DATA_LENGTH:
+                    raw_lines.append(
+                        buffer[:MAX_RAW_DATA_LENGTH].decode(
+                            "utf-8", errors="replace"
+                        )
+                    )
+                    break
                 while b"\n" in buffer:
                     line_bytes, buffer = buffer.split(b"\n", 1)
                     line = line_bytes.rstrip(b"\r").decode(

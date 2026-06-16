@@ -36,6 +36,14 @@ EVENT_COLUMNS = (
 )
 
 
+def _bounded_int(value, default, minimum, maximum):
+    try:
+        integer = int(value)
+    except (TypeError, ValueError):
+        integer = default
+    return max(minimum, min(integer, maximum))
+
+
 def _connect():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     connection = sqlite3.connect(DB_PATH, timeout=30)
@@ -127,6 +135,21 @@ def init_db():
         connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_events_country ON events(country)"
         )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_events_country_city ON events(country, city)"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_events_country_region ON events(country, region)"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_events_country_ip ON events(country, ip_address)"
+        )
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_profiles_attempts
+            ON attacker_profiles(total_attempts DESC, abuse_score DESC, last_seen DESC)
+            """
+        )
 
 
 def insert_event(event):
@@ -178,7 +201,7 @@ def mark_event_known(event_id, is_known_attacker):
 
 
 def get_all_events(limit=50, service=None, country=None):
-    limit = max(1, min(int(limit), 1000))
+    limit = _bounded_int(limit, 50, 1, 1000)
     conditions = []
     parameters = []
     if service:
@@ -207,7 +230,7 @@ def get_recent_events(limit=50):
 
 
 def get_events_by_ip(ip_address, limit=100):
-    limit = max(1, min(int(limit), 1000))
+    limit = _bounded_int(limit, 100, 1, 1000)
     with DATABASE_LOCK, database_connection() as connection:
         rows = connection.execute(
             """
@@ -365,7 +388,7 @@ def get_attacker_profile(ip_address):
 
 
 def get_top_attackers(limit=20):
-    limit = max(1, min(int(limit), 100))
+    limit = _bounded_int(limit, 20, 1, 100)
     with DATABASE_LOCK, database_connection() as connection:
         rows = connection.execute(
             """
@@ -407,7 +430,7 @@ def get_map_data():
 
 
 def get_alerts(limit=20):
-    limit = max(1, min(int(limit), 100))
+    limit = _bounded_int(limit, 20, 1, 100)
     with DATABASE_LOCK, database_connection() as connection:
         rows = connection.execute(
             """
@@ -421,7 +444,8 @@ def get_alerts(limit=20):
     return [dict(row) for row in rows]
 
 
-def get_location_breakdown():
+def get_location_breakdown(limit=100):
+    limit = _bounded_int(limit, 100, 1, 500)
     with DATABASE_LOCK, database_connection() as connection:
         country_rows = connection.execute(
             """
@@ -430,54 +454,71 @@ def get_location_breakdown():
             WHERE country IS NOT NULL AND country != ''
             GROUP BY country, country_code, country_flag
             ORDER BY count DESC, country ASC
-            """
+            LIMIT ?
+            """,
+            (limit,),
         ).fetchall()
-        countries = []
-        for country_row in country_rows:
-            country = country_row["country"]
-            cities = connection.execute(
-                """
-                SELECT city, COUNT(*) AS count
-                FROM events
-                WHERE country = ? AND city IS NOT NULL AND city != ''
-                GROUP BY city
-                ORDER BY count DESC, city ASC
-                LIMIT 5
-                """,
-                (country,),
-            ).fetchall()
-            region = connection.execute(
-                """
-                SELECT region, COUNT(*) AS count
-                FROM events
-                WHERE country = ? AND region IS NOT NULL AND region != ''
-                GROUP BY region
-                ORDER BY count DESC
-                LIMIT 1
-                """,
-                (country,),
-            ).fetchone()
-            top_ip = connection.execute(
-                """
-                SELECT ip_address, COUNT(*) AS count
-                FROM events
-                WHERE country = ?
-                GROUP BY ip_address
-                ORDER BY count DESC
-                LIMIT 1
-                """,
-                (country,),
-            ).fetchone()
-            item = dict(country_row)
-            item["cities"] = [dict(city) for city in cities]
-            item["region"] = region["region"] if region else ""
-            item["top_ip"] = top_ip["ip_address"] if top_ip else ""
-            countries.append(item)
+        countries = [dict(row) for row in country_rows]
+        country_names = [country["country"] for country in countries]
+        if not country_names:
+            return []
+
+        placeholders = ", ".join("?" for _ in country_names)
+        city_rows = connection.execute(
+            f"""
+            SELECT country, city, COUNT(*) AS count
+            FROM events
+            WHERE country IN ({placeholders}) AND city IS NOT NULL AND city != ''
+            GROUP BY country, city
+            ORDER BY country ASC, count DESC, city ASC
+            """,
+            country_names,
+        ).fetchall()
+        region_rows = connection.execute(
+            f"""
+            SELECT country, region, COUNT(*) AS count
+            FROM events
+            WHERE country IN ({placeholders}) AND region IS NOT NULL AND region != ''
+            GROUP BY country, region
+            ORDER BY country ASC, count DESC, region ASC
+            """,
+            country_names,
+        ).fetchall()
+        top_ip_rows = connection.execute(
+            f"""
+            SELECT country, ip_address, COUNT(*) AS count
+            FROM events
+            WHERE country IN ({placeholders}) AND ip_address IS NOT NULL
+            GROUP BY country, ip_address
+            ORDER BY country ASC, count DESC, ip_address ASC
+            """,
+            country_names,
+        ).fetchall()
+
+    cities_by_country = {country: [] for country in country_names}
+    for city_row in city_rows:
+        country = city_row["country"]
+        if len(cities_by_country[country]) < 5:
+            cities_by_country[country].append(dict(city_row))
+
+    region_by_country = {}
+    for region_row in region_rows:
+        region_by_country.setdefault(region_row["country"], region_row["region"])
+
+    top_ip_by_country = {}
+    for ip_row in top_ip_rows:
+        top_ip_by_country.setdefault(ip_row["country"], ip_row["ip_address"])
+
+    for item in countries:
+        country = item["country"]
+        item["cities"] = cities_by_country.get(country, [])
+        item["region"] = region_by_country.get(country, "")
+        item["top_ip"] = top_ip_by_country.get(country, "")
     return countries
 
 
 def get_top_cities(limit=20):
-    limit = max(1, min(int(limit), 100))
+    limit = _bounded_int(limit, 20, 1, 100)
     with DATABASE_LOCK, database_connection() as connection:
         rows = connection.execute(
             """
@@ -496,4 +537,3 @@ def get_top_cities(limit=20):
             (limit,),
         ).fetchall()
     return [dict(row) for row in rows]
-

@@ -8,17 +8,52 @@ import threading
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 
-from config import LOG_BACKUP_COUNT, LOG_PATH, MAX_LOG_SIZE
+from config import (
+    ENRICHMENT_QUEUE_SIZE,
+    LOG_BACKUP_COUNT,
+    LOG_PATH,
+    MAX_EVENT_FIELD_LENGTH,
+    MAX_LOG_SIZE,
+    MAX_RAW_DATA_LENGTH,
+    STORE_SENSITIVE_VALUES,
+)
 from database import models
 from enrichment.abuseipdb import check_ip
 from enrichment.geoip import lookup_ip
 from enrichment.profiler import update_attacker_profile
 
 
+REDACTED_VALUE = "<redacted>"
+
+
+def _bounded_text(value, maximum):
+    if value is None:
+        return ""
+    text = str(value)
+    if len(text) <= maximum:
+        return text
+    return text[: max(0, maximum - 14)] + "...[truncated]"
+
+
+def _captured_secret(value, maximum):
+    if value in (None, ""):
+        return ""
+    if STORE_SENSITIVE_VALUES:
+        return _bounded_text(value, maximum)
+    return REDACTED_VALUE
+
+
+def _safe_port(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
 class HoneypotLogger:
     def __init__(self, worker_count=2):
         models.init_db()
-        self._queue = queue.Queue()
+        self._queue = queue.Queue(maxsize=ENRICHMENT_QUEUE_SIZE)
         self._worker_count = worker_count
         self._workers = []
         self._start_lock = threading.Lock()
@@ -63,7 +98,10 @@ class HoneypotLogger:
             if not self._started:
                 return
             for _ in self._workers:
-                self._queue.put(None)
+                try:
+                    self._queue.put(None, timeout=1)
+                except queue.Full:
+                    self._logger.warning("Enrichment queue full during shutdown")
             for worker in self._workers:
                 worker.join(timeout=6)
             self._workers.clear()
@@ -89,15 +127,22 @@ class HoneypotLogger:
         raw_data="",
     ):
         self.start()
+        ip_text = _bounded_text(ip_address, 45)
+        service_name = _bounded_text(service, 32).upper() or "UNKNOWN"
+        username = _bounded_text(username_tried, 256)
+        password = _captured_secret(password_tried, 256)
+        command = _bounded_text(command_tried, MAX_EVENT_FIELD_LENGTH)
+        raw_payload = _captured_secret(raw_data, MAX_RAW_DATA_LENGTH)
+        port_number = _safe_port(port)
         event = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "ip_address": ip_address,
-            "port": int(port),
-            "service": service.upper(),
-            "username_tried": username_tried or "",
-            "password_tried": password_tried or "",
-            "command_tried": command_tried or "",
-            "raw_data": raw_data or "",
+            "ip_address": ip_text,
+            "port": port_number,
+            "service": service_name,
+            "username_tried": username,
+            "password_tried": password,
+            "command_tried": command,
+            "raw_data": raw_payload,
             "country": "",
             "country_code": "",
             "city": "",
@@ -125,18 +170,21 @@ class HoneypotLogger:
             json.dumps(
                 {
                     "id": event_id,
-                    "ip_address": ip_address,
-                    "port": port,
-                    "service": service.upper(),
-                    "username_tried": username_tried or "",
-                    "password_tried": password_tried or "",
-                    "command_tried": command_tried or "",
-                    "raw_data": raw_data or "",
+                    "ip_address": ip_text,
+                    "port": port_number,
+                    "service": service_name,
+                    "username_tried": username,
+                    "password_tried": REDACTED_VALUE if password else "",
+                    "command_tried": command,
+                    "raw_data_length": len(str(raw_data or "")),
                 },
                 ensure_ascii=True,
             ),
         )
-        self._queue.put((event_id, event))
+        try:
+            self._queue.put_nowait((event_id, event))
+        except queue.Full:
+            self._logger.warning("Skipped enrichment for event %s: queue full", event_id)
         return event_id
 
     def _enrichment_worker(self):

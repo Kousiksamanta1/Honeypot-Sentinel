@@ -4,10 +4,11 @@ import socket
 import threading
 
 from config import HONEYPOT_HOST, TELNET_PORT
+from honeypot.listener_utils import ThreadLimitedTCPListenerMixin
 from honeypot.logger import event_logger
 
 
-class TelnetListener:
+class TelnetListener(ThreadLimitedTCPListenerMixin):
     service = "TELNET"
 
     def __init__(self, host=HONEYPOT_HOST, port=TELNET_PORT):
@@ -15,6 +16,7 @@ class TelnetListener:
         self.port = port
         self._socket = None
         self._stop_event = threading.Event()
+        self._init_client_limiter()
 
     @staticmethod
     def _read_line(client, maximum=4096):
@@ -45,12 +47,7 @@ class TelnetListener:
                     if not self._stop_event.is_set():
                         event_logger.warning("Telnet listener accept failed")
                     break
-                threading.Thread(
-                    target=self._handle_client,
-                    args=(client, address),
-                    daemon=True,
-                    name=f"telnet-client-{address[0]}",
-                ).start()
+                self._start_client_thread(client, address)
         except OSError as exc:
             event_logger.warning(
                 f"Telnet honeypot could not bind to {self.host}:{self.port}: {exc}"

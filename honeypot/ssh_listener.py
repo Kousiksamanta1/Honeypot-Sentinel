@@ -4,10 +4,11 @@ import socket
 import threading
 
 from config import HONEYPOT_HOST, SSH_PORT
+from honeypot.listener_utils import ThreadLimitedTCPListenerMixin
 from honeypot.logger import event_logger
 
 
-class SSHListener:
+class SSHListener(ThreadLimitedTCPListenerMixin):
     service = "SSH"
 
     def __init__(self, host=HONEYPOT_HOST, port=SSH_PORT):
@@ -15,6 +16,7 @@ class SSHListener:
         self.port = port
         self._socket = None
         self._stop_event = threading.Event()
+        self._init_client_limiter()
 
     def serve_forever(self):
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -34,12 +36,7 @@ class SSHListener:
                     if not self._stop_event.is_set():
                         event_logger.warning("SSH listener accept failed")
                     break
-                threading.Thread(
-                    target=self._handle_client,
-                    args=(client, address),
-                    daemon=True,
-                    name=f"ssh-client-{address[0]}",
-                ).start()
+                self._start_client_thread(client, address)
         except OSError as exc:
             event_logger.warning(
                 f"SSH honeypot could not bind to {self.host}:{self.port}: {exc}"

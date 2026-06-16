@@ -1,11 +1,15 @@
 """Dashboard and JSON API routes."""
 
+import ipaddress
+
 from flask import Blueprint, Response, jsonify, render_template, request
+from werkzeug.exceptions import BadRequest, HTTPException
 
 from database import models
 
 
 api_blueprint = Blueprint("api", __name__)
+ALLOWED_SERVICES = {"SSH", "HTTP", "FTP", "TELNET"}
 
 
 def _integer_arg(name, default, minimum=1, maximum=1000):
@@ -14,6 +18,30 @@ def _integer_arg(name, default, minimum=1, maximum=1000):
     except (TypeError, ValueError):
         value = default
     return max(minimum, min(value, maximum))
+
+
+def _text_arg(name, maximum=128):
+    value = request.args.get(name, "")
+    if value is None:
+        return ""
+    return str(value).strip()[:maximum]
+
+
+def _service_filter():
+    service = _text_arg("service", maximum=16).upper()
+    if service and service not in ALLOWED_SERVICES:
+        raise BadRequest("Unsupported service filter")
+    return service or None
+
+
+@api_blueprint.app_errorhandler(HTTPException)
+def handle_http_exception(error):
+    return jsonify({"error": error.description}), error.code
+
+
+@api_blueprint.app_errorhandler(Exception)
+def handle_uncaught_exception(_error):
+    return jsonify({"error": "Internal server error"}), 500
 
 
 @api_blueprint.get("/")
@@ -26,15 +54,21 @@ def favicon():
     return Response(status=204)
 
 
+@api_blueprint.get("/healthz")
+def healthz():
+    models.get_stats()
+    return jsonify({"status": "ok"})
+
+
 @api_blueprint.get("/api/events")
 def events():
     limit = _integer_arg("limit", 50)
-    service = request.args.get("service", "").strip()
-    country = request.args.get("country", "").strip()
+    service = _service_filter()
+    country = _text_arg("country", maximum=128)
     return jsonify(
         models.get_all_events(
             limit=limit,
-            service=service or None,
+            service=service,
             country=country or None,
         )
     )
@@ -88,8 +122,12 @@ def locations():
 
 @api_blueprint.get("/api/attacker/<ip_address>")
 def attacker(ip_address):
-    profile = models.get_attacker_profile(ip_address)
+    try:
+        normalized_ip = str(ipaddress.ip_address(ip_address))
+    except ValueError as exc:
+        raise BadRequest("Invalid IP address") from exc
+    profile = models.get_attacker_profile(normalized_ip)
     if profile is None:
         return jsonify({"error": "Attacker profile not found"}), 404
-    profile["events"] = models.get_events_by_ip(ip_address, limit=10)
+    profile["events"] = models.get_events_by_ip(normalized_ip, limit=10)
     return jsonify(profile)

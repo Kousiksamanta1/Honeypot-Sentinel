@@ -1,5 +1,7 @@
 """Attacker profile aggregation."""
 
+from datetime import datetime, timezone
+
 from config import ALERT_THRESHOLD
 from database import models
 
@@ -15,16 +17,28 @@ def _prefer(new_value, old_value):
     return new_value if new_value not in (None, "") else old_value
 
 
+def _integer(value, default=0):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def update_attacker_profile(event, increment=True):
-    ip_address = event["ip_address"]
+    ip_address = event.get("ip_address")
+    if not ip_address:
+        return False
+    timestamp = event.get("timestamp") or datetime.now(timezone.utc).isoformat()
     with models.DATABASE_LOCK, models.database_connection() as connection:
         existing = connection.execute(
             "SELECT * FROM attacker_profiles WHERE ip_address = ?", (ip_address,)
         ).fetchone()
 
         if existing:
-            total_attempts = existing["total_attempts"] + (1 if increment else 0)
-            last_seen = max(existing["last_seen"] or "", event["timestamp"] or "")
+            total_attempts = _integer(existing["total_attempts"]) + (
+                1 if increment else 0
+            )
+            last_seen = max(existing["last_seen"] or "", timestamp)
             services = _ordered_values(
                 existing["services_targeted"], event.get("service")
             )
@@ -35,7 +49,7 @@ def update_attacker_profile(event, increment=True):
                 existing["passwords_tried"], event.get("password_tried")
             )
             abuse_score = max(
-                int(existing["abuse_score"] or 0), int(event.get("abuse_score") or 0)
+                _integer(existing["abuse_score"]), _integer(event.get("abuse_score"))
             )
             is_flagged = int(
                 abuse_score > 50
@@ -105,7 +119,7 @@ def update_attacker_profile(event, increment=True):
             )
         else:
             total_attempts = 1
-            abuse_score = int(event.get("abuse_score") or 0)
+            abuse_score = _integer(event.get("abuse_score"))
             is_flagged = int(
                 abuse_score > 50 or total_attempts >= ALERT_THRESHOLD
             )
@@ -121,8 +135,8 @@ def update_attacker_profile(event, increment=True):
                 """,
                 (
                     ip_address,
-                    event["timestamp"],
-                    event["timestamp"],
+                    timestamp,
+                    timestamp,
                     total_attempts,
                     event.get("service") or "",
                     event.get("country") or "",
