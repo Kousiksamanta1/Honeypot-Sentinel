@@ -5,6 +5,7 @@
 # Honeypot Sentinel
 
 [![CI](https://github.com/Kousiksamanta1/Honeypot-Sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/Kousiksamanta1/Honeypot-Sentinel/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/badge/Version-2.0.0-42b8a0)](VERSION)
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Flask](https://img.shields.io/badge/Flask-3.x-111111?logo=flask)](https://flask.palletsprojects.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-d5a94f.svg)](#license)
